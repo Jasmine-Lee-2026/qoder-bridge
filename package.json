@@ -1,0 +1,17 @@
+﻿{
+  "name": "qoder-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone OpenAI-compatible bridge for the Qoder api2-v2 endpoint (tool calling, no queue).",
+  "scripts": {
+    "start": "node src/index.js",
+    "login": "node src/index.js --login",
+    "refresh": "node src/index.js --refresh",
+    "info": "node src/index.js --info"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
