@@ -1,4 +1,4 @@
-﻿// Entrypoint.
+// Entrypoint.
 //   npm start            serve the OpenAI-compatible bridge + control page
 //   npm run login        CLI device-flow login (writes ~/.qoder-bridge/auth.json)
 //   npm run refresh      force a token refresh attempt

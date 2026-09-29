@@ -1,4 +1,4 @@
-﻿// Follow-up checks for the review fixes:
+// Follow-up checks for the review fixes:
 //  1. legacy alias request still routes and answers with the public name
 //  2. every streamed frame echoes the public model id (never the internal key)
 //  3. stream default: absent `stream` field must return a non-stream JSON body

@@ -1,4 +1,4 @@
-﻿// Token store for the Qoder api2-v2 endpoint.
+// Token store for the Qoder api2-v2 endpoint.
 //
 // Three sources, tried in order:
 //   1. our own auth file    ~/.qoder-bridge/auth.json   (authoritative once seeded)
@@ -37,6 +37,15 @@ const VERIFY_TTL_MS = 60_000;
 
 function log(...a) {
   console.log(new Date().toISOString(), '[auth]', ...a);
+}
+
+// Display form of the account email: keep the first character and the domain,
+// mask the rest. The real value stays in auth.json only.
+function maskEmail(email) {
+  const s = String(email || '');
+  const at = s.indexOf('@');
+  if (at < 0) return s;
+  return `${s.slice(0, 1)}***${s.slice(at)}`;
 }
 
 function readJson(file) {
@@ -120,7 +129,7 @@ export function authInfo() {
   return {
     present: true,
     file: AUTH_FILE,
-    email: a.email,
+    email: maskEmail(a.email),
     seeded_from: a.seeded_from || null,
     token: a.token.slice(0, 6) + '...' + a.token.slice(-4),
     expires: expiresIn(a.expire_time),
@@ -340,7 +349,7 @@ export async function deviceLogin({ timeoutMs = 180000, openUrl = true } = {}) {
             : 0,
         last_refresh: new Date().toISOString(),
       });
-      loginState.done = { email: email || name || 'unknown account', expires: expiresIn(cache.expire_time) };
+      loginState.done = { email: maskEmail(email || name || 'unknown account'), expires: expiresIn(cache.expire_time) };
       log(`login OK: ${loginState.done.email}; token expires ${loginState.done.expires}`);
       return cache;
     }

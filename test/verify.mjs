@@ -1,4 +1,4 @@
-﻿// Validate the bridge end-to-end: every SSE frame must be valid JSON and the
+// Validate the bridge end-to-end: every SSE frame must be valid JSON and the
 // stream must terminate cleanly. This reproduces the "JSON parsing failed /
 // Unexpected end of JSON input" case that Cline hit at the end of a stream.
 const BASE = 'http://127.0.0.1:9528/v1/chat/completions';

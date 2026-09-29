@@ -1,4 +1,4 @@
-﻿// OpenAI-compatible server in front of the Qoder api2-v2 endpoint.
+// OpenAI-compatible server in front of the Qoder api2-v2 endpoint.
 //
 // Differences from the upstream wire format are deliberate:
 //   - every forwarded SSE frame is re-serialized, so clients never see the raw
@@ -18,6 +18,10 @@ const PORT = Number(process.env.QODER_PORT || 9528);
 const HOST = process.env.QODER_HOST || '127.0.0.1';
 const API_KEY = process.env.QODER_API_KEY || 'sk-qoder-bridge-local-2026';
 const DEBUG = !!process.env.QODER_DEBUG;
+// CORS is off by default: a permissive ACAO let any web page the user visits
+// read /health (account email, token prefix). Browser-based clients that talk
+// to the bridge from another origin can set QODER_CORS=1 to restore it.
+const CORS = process.env.QODER_CORS === '1';
 
 const MAX_RETRIES = Number(process.env.QODER_MAX_RETRIES || 5);
 const QUEUE_MAX_WAIT = Number(process.env.QODER_QUEUE_MAX_WAIT || 20);
@@ -186,19 +190,30 @@ export function createServer() {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const remote = req.socket.remoteAddress || '';
     const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-    res.setHeader('access-control-allow-origin', '*');
-    res.setHeader('access-control-allow-headers', 'authorization,content-type');
-    res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
+    if (CORS) {
+      res.setHeader('access-control-allow-origin', '*');
+      res.setHeader('access-control-allow-headers', 'authorization,content-type');
+      res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
+    }
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-    // Local control page and its login endpoints - loopback only.
+    // A request coming from the local browser counts as loopback too - the
+    // loopback check alone cannot tell the user's own tabs from a malicious
+    // web page doing cross-origin fetches to 127.0.0.1. So every endpoint that
+    // exposes account data or triggers login requires the API key on top of
+    // the loopback check; without CORS headers those requests are also unread-
+    // able cross-origin even when they succeed.
+    const localKey = (req.headers.authorization || '') === `Bearer ${API_KEY}`;
+    const privateAccess = loopback && localKey;
+
+    // Local control page: loopback only, no account data in the HTML itself.
     if (url.pathname === '/' && req.method === 'GET') {
       if (!loopback) { sendJSON(res, 403, { error: { message: 'loopback only', type: 'forbidden' } }); return; }
-      controlPageHandler(req, res, sendJSON);
+      controlPageHandler(req, res, sendJSON, API_KEY);
       return;
     }
     if (url.pathname === '/internal/login' && req.method === 'POST') {
-      if (!loopback) { sendJSON(res, 403, { error: { message: 'loopback only', type: 'forbidden' } }); return; }
+      if (!privateAccess) { sendJSON(res, 403, { error: { message: 'forbidden', type: 'forbidden' } }); return; }
       // The approval page must open in the user's browser; the control page
       // itself stays interactive, so the device URL is opened as a new tab.
       deviceLogin({ timeoutMs: 180000, openUrl: true }).catch((e) => {
@@ -208,7 +223,7 @@ export function createServer() {
       return;
     }
     if (url.pathname === '/internal/login-status' && req.method === 'GET') {
-      if (!loopback) { sendJSON(res, 403, { error: { message: 'loopback only', type: 'forbidden' } }); return; }
+      if (!privateAccess) { sendJSON(res, 403, { error: { message: 'forbidden', type: 'forbidden' } }); return; }
       sendJSON(res, 200, {
         active: loginState.active,
         error: loginState.error,
@@ -229,6 +244,7 @@ export function createServer() {
     }
 
     if (req.method === 'GET' && url.pathname === '/health') {
+      if (!privateAccess) { sendJSON(res, 403, { error: { message: 'forbidden', type: 'forbidden' } }); return; }
       const info = authInfo();
       const { modelConfigs, ...rest } = info; // keep /health compact
       sendJSON(res, info.present ? 200 : 503, { ok: !!info.present, auth: rest });

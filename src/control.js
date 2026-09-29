@@ -2,6 +2,12 @@
 // bridge itself. Loopback-only by construction: the server binds 127.0.0.1 and
 // the handler re-checks the remote address.
 //
+// Account endpoints (/health, /internal/*) require the API key, so the server
+// injects it into the page at render time via the __KEY__ placeholder. Without
+// CORS headers a malicious web page can neither read this HTML cross-origin
+// nor send the Authorization header cross-origin (preflight fails), so the
+// injected key does not leak beyond the local machine.
+//
 // Flow: the page shows token state; "Renew token" POSTs /internal/login, which
 // opens the Qoder approval page in a NEW browser tab; the page polls
 // /internal/login-status every 2s and turns green on success. The token is
@@ -57,6 +63,8 @@ const PAGE = `<!doctype html>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
+const KEY = '__KEY__';
+const authHeaders = () => ({ authorization: 'Bearer ' + KEY });
 let polling = null;
 
 function daysLeft(s) {
@@ -66,7 +74,8 @@ function daysLeft(s) {
 
 async function refresh() {
   try {
-    const r = await fetch('/health');
+    const r = await fetch('/health', { headers: authHeaders() });
+    if (r.status === 403) throw new Error('forbidden');
     const j = await r.json();
     const a = j.auth || {};
     $('state').textContent = j.ok ? 'running' : 'no token';
@@ -85,7 +94,7 @@ async function refresh() {
 
 async function pollLogin() {
   for (;;) {
-    const r = await fetch('/internal/login-status');
+    const r = await fetch('/internal/login-status', { headers: authHeaders() });
     const j = await r.json();
     if (j.active) {
       $('msg').innerHTML = '<span class="spin">&#8635;</span> waiting for your approval in the browser tab...';
@@ -106,7 +115,7 @@ $('renew').onclick = async () => {
   $('renew').disabled = true;
   $('msg').textContent = '';
   try {
-    const r = await fetch('/internal/login', { method: 'POST' });
+    const r = await fetch('/internal/login', { method: 'POST', headers: authHeaders() });
     const j = await r.json().catch(() => ({}));
     if (r.status === 409) {
       $('msg').textContent = 'A login is already in progress...';
@@ -129,13 +138,17 @@ refresh();
 </body>
 </html>`;
 
-export function controlPageHandler(req, res, send) {
+export function controlPageHandler(req, res, send, apiKey) {
   if (req.method !== 'GET') {
     res.writeHead(405, { 'content-type': 'text/plain' });
     res.end('method not allowed');
     return true;
   }
-  const body = PAGE.replace(/\n/g, '\r\n');
+  // split/join instead of replace(): a replacement string containing "$&"
+  // would otherwise be interpreted as a pattern. Escape HTML-significant
+  // characters so a key with quotes or angle brackets cannot break the page.
+  const safeKey = String(apiKey).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const body = PAGE.split('__KEY__').join(safeKey).replace(/\n/g, '\r\n');
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
   res.end(body);
   return true;

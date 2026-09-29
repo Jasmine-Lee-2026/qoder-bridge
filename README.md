@@ -89,9 +89,20 @@ All via environment variables; defaults are fine for local use.
 | `QODER_HOST`      | `127.0.0.1`                    | Bind address (keep loopback)|
 | `QODER_API_KEY`   | `sk-qoder-bridge-local-2026`   | Key clients must send       |
 | `QODER_AUTH_FILE` | `~/.qoder-bridge/auth.json`    | Token store location        |
+| `QODER_CORS`      | off                            | Set to `1` to send permissive CORS headers (for browser-based clients on another origin) |
 
-The server binds `127.0.0.1` only. The control page re-checks the remote
-address per request.
+## Security notes
+
+- The server binds `127.0.0.1` only, and the control page re-checks the remote
+  address per request. Do not port-forward or reverse-proxy it to a network.
+- Cross-origin reads are blocked by default: no CORS headers are sent unless
+  `QODER_CORS=1`, so a web page you visit cannot read `/health` (account data)
+  or call `/internal/login` from your browser.
+- `/health`, `/internal/login`, and `/internal/login-status` additionally
+  require the API key; the control page gets it injected at render time.
+- The token lives in `~/.qoder-bridge/auth.json` outside the repo, written
+  atomically. Logs mask the account email (`j***@example.com`).
+- Change `QODER_API_KEY` from the default if other people use this machine.
 
 ## Windows helpers
 
@@ -104,19 +115,22 @@ address per request.
 ```bat
 node test\verify.mjs
 node test\review-checks.mjs
+node test\security-checks.mjs
 ```
 
 Covers: auth rejection, model resolution and aliases, catalog-only passthrough,
-streaming with SSE repair, non-streaming, tool-call name backfill.
+streaming with SSE repair, non-streaming, tool-call name backfill; plus the
+security posture: anonymous access to account endpoints, email masking, and
+default-off CORS.
 
 ## API surface
 
-- `POST /v1/chat/completions` -- OpenAI-compatible, streaming and non-streaming
-- `GET /v1/models` -- model list
-- `GET /health` -- server + token state
+- `POST /v1/chat/completions` -- OpenAI-compatible, streaming and non-streaming (API key)
+- `GET /v1/models` -- model list (open: model names only)
+- `GET /health` -- server + token state (API key)
 - `GET /` -- control page (loopback only)
-- `POST /internal/login` -- start device login (opens browser)
-- `GET /internal/login-status` -- poll login progress
+- `POST /internal/login` -- start device login (loopback + API key)
+- `GET /internal/login-status` -- poll login progress (loopback + API key)
 
 ## Project layout
 
