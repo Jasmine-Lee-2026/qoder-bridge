@@ -28,7 +28,7 @@ multi-platform proxy. Concretely it gives you:
 ## Quick start
 
 ```bat
-git clone <repo-url> qoder-bridge
+git clone https://github.com/Jasmine-Lee-2026/qoder-bridge.git qoder-bridge
 cd qoder-bridge
 npm start
 ```
